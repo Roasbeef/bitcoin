@@ -988,6 +988,7 @@ private:
     const CScript &scriptCode; //! output script being consumed
     const unsigned int nIn;    //! input index of txTo being signed
     const bool fAnyoneCanPay;  //! whether the hashtype has the SIGHASH_ANYONECANPAY flag set
+    const bool fNoInput;       //! whether the hashtype has the SIGHASH_NOINPUT flag set
     const bool fHashSingle;    //! whether the hashtype is SIGHASH_SINGLE
     const bool fHashNone;      //! whether the hashtype is SIGHASH_NONE
 
@@ -995,6 +996,7 @@ public:
     CTransactionSignatureSerializer(const CTransaction &txToIn, const CScript &scriptCodeIn, unsigned int nInIn, int nHashTypeIn) :
         txTo(txToIn), scriptCode(scriptCodeIn), nIn(nInIn),
         fAnyoneCanPay(!!(nHashTypeIn & SIGHASH_ANYONECANPAY)),
+        fNoInput(!!(nHashTypeIn & SIGHASH_NOINPUT)),
         fHashSingle((nHashTypeIn & 0x1f) == SIGHASH_SINGLE),
         fHashNone((nHashTypeIn & 0x1f) == SIGHASH_NONE) {}
 
@@ -1027,8 +1029,13 @@ public:
         // In case of SIGHASH_ANYONECANPAY, only the input being signed is serialized
         if (fAnyoneCanPay)
             nInput = nIn;
-        // Serialize the prevout
-        ::Serialize(s, txTo.vin[nInput].prevout, nType, nVersion);
+        // If using SIGHASH_NOINPUT, the prevout is not included under the signature
+        if (fNoInput)
+            // Serialize a "NULL" prevout: 00000000000000000000000000000000:4294967295
+            ::Serialize(s, COutPoint(), nType, nVersion);
+        else
+            // Serialize the prevout
+            ::Serialize(s, txTo.vin[nInput].prevout, nType, nVersion);
         // Serialize the script
         if (nInput != nIn)
             // Blank out other inputs' signatures
